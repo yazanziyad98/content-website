@@ -1,0 +1,18 @@
+<div class="card shadow p-4 mb-3">
+    <h5 class="card-title">{{ item.name }}</h5>
+    <p class="card-text">Genre: {{ item.genre }}</p>
+
+    {% if item.length %}
+      <p class="card-text">Length: {{ item.length }} mins</p>
+    {% endif %}
+
+    {% if item.seasons %}
+      <p class="card-text">Seasons: {{ item.seasons }}</p>
+    {% endif %}
+
+    {% if item.episodes %}
+      <p class="card-text">Episodes: {{ item.episodes }}</p>
+    {% endif %}
+
+    <span class="badge bg-info">⭐ Rating: {{ item.rating }}</span>
+</div>
