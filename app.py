@@ -232,7 +232,7 @@ def add_movie():
         error_message = str(e)
         return render_template("home.html", contents=platform1.v_content_list, error=error_message)
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True,)
 
   
   
