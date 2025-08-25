@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
  // Example content database
 const contentDatabase = {
-    'h': { 
+    'nuha': { 
         type: 'series', 
         genre: 'Romance', 
         length: 8, 
