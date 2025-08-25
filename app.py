@@ -109,6 +109,20 @@ platform1 = Platform()
 
 @app.route("/")
 def home():
+    db_movies = MovieModel.query.all()
+    
+    # Convert database rows to Movie objects for display
+    movies_for_display = []
+    for db_movie in db_movies:
+        movie_obj = Movie(
+            name=db_movie.name,
+            genre=db_movie.genre,
+            length=db_movie.length,
+            rating=db_movie.rating,
+            on_netflix=db_movie.on_netflix
+        )
+        movies_for_display.append(movie_obj)
+    
     return render_template("home.html", contents=platform1.v_content_list)
 
 @app.route("/random")
