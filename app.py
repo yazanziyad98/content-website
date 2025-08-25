@@ -1,13 +1,26 @@
 import random
 from abc import ABC, abstractmethod
 from flask import Flask, render_template, request, redirect, url_for
-import sqlite3
 import os
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///local.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
  
+class MovieModel(db.Model):
+    __tablename__ = 'movies'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    genre = db.Column(db.String(50))
+    length = db.Column(db.Integer)
+    rating = db.Column(db.Float)
+    on_netflix = db.Column(db.String(10), nullable=True)
+
+    def __repr__(self):
+        return f"<Movie {self.name}>"
 
 class Platform:  # container/manager class
     def __init__(self):
@@ -56,7 +69,8 @@ class Movie(VideoContent):
 
     def details(self):
         return f"Type: Movie | Name: {self.name} | Genre: {self.genre} | Length: {self.length} | Rating: {self.rating}"
-
+with app.app_context():
+    db.create_all()
 
 class Show(VideoContent):
     def __init__(self, name,genre,number_of_seasons,rating,number_of_episode_per_season = None,on_netflix = None):
@@ -90,77 +104,12 @@ class YoutubeVideo(VideoContent):
         return f"ContentType: Youtube Video | Name: {self.name}"
 
 
-DB_FILE = "content.db"
+ 
 
 platform1 = Platform()
 
 
-
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    # Create tables if they don't exist
-    c.execute('''CREATE TABLE IF NOT EXISTS movies (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                genre TEXT,
-                length REAL,
-                rating REAL,
-                On_Netflix TEXT,
-                UNIQUE(name, rating, length)
-            )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS series (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    genre TEXT,
-                    seasons INTEGER,
-                    episodes INTEGER,
-                    rating REAL,
-                    On_Netflix TEXT,
-                   UNIQUE(name, rating,seasons)
-              
-                )''')
-    conn.commit()
-    conn.close()
-
-def load_data():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-
-    # Load movies
-    for row in c.execute("SELECT name, genre, length, rating FROM movies"):
-        name, genre, length, rating = row
-        platform1.add_content(Movie(name, genre, length, rating))
-
-    # Load series
-    for row in c.execute("SELECT name, genre, seasons, episodes, rating FROM series"):
-        name, genre, seasons, episodes, rating = row
-        platform1.add_content(Show(name, genre, seasons, rating, episodes))
-
-    conn.close()
-
-# Call at startup
-init_db()        
-load_data()
-
-
-#movie1 = Movie('Bee Movie', 'Romance', 1.31, 10)
-# movie2 = Movie('Road House', 'Action', 2.1, 6.2)
-#show1 = Show('House MD', 'Drama', 8, 10,25,'Y')
-#platform1.add_content(movie1)
-# platform1.add_content(movie2)
-#platform1.add_content(show1)
-
-# for q in platform1.v_content_list:
-#  print(q)
-
-
  
-
-
-
-# Flask Web App
-
 @app.route("/")
 def home():
     return render_template("home.html", contents=platform1.v_content_list)
@@ -178,8 +127,8 @@ def random_content():
     return render_template("random.html", item=item)
 
 
-@app.route("/add_movie", methods=["POST"])
-def add_movie():
+@app.route("/add_content", methods=["POST"])
+def add_content():
     content_type = request.form.get("content_type")
     name = request.form.get("name")
     genre = request.form.get("genre")
@@ -194,17 +143,22 @@ def add_movie():
                 length = float(length_str) if length_str else None
                 new_movie = Movie(name, genre, length, rating)
                 platform1.add_content(new_movie)
-                conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-                try:
-                    c.execute("INSERT INTO movies (name, genre, length, rating) VALUES (?, ?, ?, ?)", (name, genre, length, rating))
-                    conn.commit()
-                except sqlite3.IntegrityError:
-                    conn.close()
-                    return render_template("home.html", contents=platform1.v_content_list,
-                               error=f"The Movie '{name}' already exists")
-                conn.close()
+    
+            
+                
 
+                db_movie = MovieModel(
+                name=name,
+                genre=genre,
+                length=length,
+                rating=rating,
+                on_netflix=None
+            )
+                db.session.add(db_movie)
+                db.session.commit()
+        
+                return render_template("home.html", contents=platform1.v_content_list,
+                               error=f"The Movie '{name}' already exists")
         elif content_type == "series":
         
             seasons =  int(request.form.get("seasons"))
@@ -212,23 +166,10 @@ def add_movie():
             episodes = int(episodes_str) if episodes_str else None
             new_series = Show(name, genre, seasons, episodes, rating)
             platform1.add_content(new_series)
-
-            
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            try:
-                c.execute("INSERT INTO series (name, genre, seasons, episodes, rating) VALUES (?, ?, ?, ?, ?)",(name, genre, seasons, episodes, rating))
-                conn.commit()
-            except sqlite3.IntegrityError:
-                    conn.close()
-                    return render_template("home.html", contents=platform1.v_content_list,error=f"The Series '{name}' already exists")
-                
-        
-            conn.close()
+ 
         else: 
             return render_template("home.html", contents=platform1.v_content_list, error="Invalid content type")
         return redirect(url_for("home"))
-  
     
     except ValueError as e:
         # If validation fails, show a friendly message
