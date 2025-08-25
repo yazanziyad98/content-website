@@ -6,10 +6,22 @@ from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///local.db')
+# For Heroku deployment - use DATABASE_URL if available, otherwise use local PostgreSQL or SQLite for development
+database_url = os.environ.get('DATABASE_URL')
+
+if database_url:
+    # Heroku gives old-style URLs starting with postgres://, which SQLAlchemy dislikes
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # For local development without DATABASE_URL set
+    # You can use a local PostgreSQL or SQLite as fallback
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///movies.db'  # Change this to your local PostgreSQL if preferred
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
- 
+
 class MovieModel(db.Model):
     __tablename__ = 'movies'
     id = db.Column(db.Integer, primary_key=True)
@@ -42,7 +54,6 @@ class Platform:  # container/manager class
         else:
             return random.choice(self.v_content_list)
 
-
 class VideoContent(ABC):
     def __init__(self,name,rating):
          self.name = name
@@ -51,10 +62,6 @@ class VideoContent(ABC):
     @abstractmethod
     def details(self):
         pass
-    # def set_rating(self,rating):
-    #     if rating > 10 or rating <0:
-    #         raise ValueError('Ratings should be between 1 - 10')
-    #     self.rating = rating 
 
 class Movie(VideoContent):
     def __init__(self,name,genre,length,rating,on_netflix = None):
@@ -69,8 +76,6 @@ class Movie(VideoContent):
 
     def details(self):
         return f"Type: Movie | Name: {self.name} | Genre: {self.genre} | Length: {self.length} | Rating: {self.rating}"
-with app.app_context():
-    db.create_all()
 
 class Show(VideoContent):
     def __init__(self, name,genre,number_of_seasons,rating,number_of_episode_per_season = None,on_netflix = None):
@@ -90,34 +95,25 @@ class Show(VideoContent):
             f"| Seasons: {self.number_of_seasons} | Rating: {self.rating} "
             f"| Total Episodes: {self.number_of_episode_per_season * self.number_of_seasons if self.number_of_episode_per_season else 'Undefined'}"
             f"| Is it on Netflix: {'Yup' if self.on_netflix == 'Yes' else 'Nope' if self.on_netflix == 'No' else 'No Idea'}"
-
         )
-
 
 class Documentry(VideoContent):
     def details(self):
         return f"ContentType: Documentary | Name: {self.name}"
 
-
 class YoutubeVideo(VideoContent):
     def details(self):
         return f"ContentType: Youtube Video | Name: {self.name}"
 
-
- 
-
 platform1 = Platform()
 
-
- 
 @app.route("/")
 def home():
     return render_template("home.html", contents=platform1.v_content_list)
 
-
-@app.route("/random") #flask defaults to GET, so this is similar to adding  methods=["GET"]
+@app.route("/random")
 def random_content():
-    feel_like = request.args.get("type")  # "movie" or "show"
+    feel_like = request.args.get("type")
     probability = request.args.get("prob")
 
     if probability:
@@ -125,7 +121,6 @@ def random_content():
 
     item = platform1.get_random_content(feel_like, probability)
     return render_template("random.html", item=item)
-
 
 @app.route("/add_content", methods=["POST"])
 def add_content():
@@ -136,31 +131,25 @@ def add_content():
     
     try:
         if content_type == 'movie':
-                try:
-                    length_str = float(request.form.get("length","").strip())
-                except ValueError:
-                    return render_template("home.html", contents = platform1.v_content_list, error = "Length Must be a Valid Number" )
-                length = float(length_str) if length_str else None
-                new_movie = Movie(name, genre, length, rating)
-                platform1.add_content(new_movie)
-    
+            try:
+                length_str = float(request.form.get("length","").strip())
+            except ValueError:
+                return render_template("home.html", contents = platform1.v_content_list, error = "Length Must be a Valid Number" )
+            length = float(length_str) if length_str else None
+            new_movie = Movie(name, genre, length, rating)
+            platform1.add_content(new_movie)
             
-                
-
-                db_movie = MovieModel(
+            db_movie = MovieModel(
                 name=name,
                 genre=genre,
                 length=length,
                 rating=rating,
                 on_netflix=None
             )
-                db.session.add(db_movie)
-                db.session.commit()
-        
-                return render_template("home.html", contents=platform1.v_content_list,
-                               error=f"The Movie '{name}' already exists")
+            db.session.add(db_movie)
+            db.session.commit()
+            
         elif content_type == "series":
-        
             seasons =  int(request.form.get("seasons"))
             episodes_str = request.form.get("episodes", "").strip()
             episodes = int(episodes_str) if episodes_str else None
@@ -172,14 +161,10 @@ def add_content():
         return redirect(url_for("home"))
     
     except ValueError as e:
-        # If validation fails, show a friendly message
         error_message = str(e)
         return render_template("home.html", contents=platform1.v_content_list, error=error_message)
 
-
-
 if __name__ == "__main__":
-    app.run(debug=True,)
-
-  
-  
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
