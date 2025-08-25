@@ -3,7 +3,13 @@ from abc import ABC, abstractmethod
 from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
 import os
+from flask_sqlalchemy import SQLAlchemy
 
+app = Flask(__name__)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
 
 class Platform:  # container/manager class
@@ -140,6 +146,7 @@ def load_data():
 init_db()        
 load_data()
 
+
 #movie1 = Movie('Bee Movie', 'Romance', 1.31, 10)
 # movie2 = Movie('Road House', 'Action', 2.1, 6.2)
 #show1 = Show('House MD', 'Drama', 8, 10,25,'Y')
@@ -156,7 +163,6 @@ load_data()
 
 
 # Flask Web App
-app = Flask(__name__)
 
 @app.route("/")
 def home():
@@ -231,6 +237,9 @@ def add_movie():
         # If validation fails, show a friendly message
         error_message = str(e)
         return render_template("home.html", contents=platform1.v_content_list, error=error_message)
+
+
+
 if __name__ == "__main__":
     app.run(debug=True,)
 
